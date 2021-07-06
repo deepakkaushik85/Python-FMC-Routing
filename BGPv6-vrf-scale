@@ -1,0 +1,81 @@
+##############################################################################################################################################
+#######################Create Scale BGPv6 nbr in scaled VRFs with multiple intf/vrf and leaking all VRF routes to each other##################
+############################################device_id : Device id on which BGP need to be configured##########################################
+#############################################ipv6: passed value as first octet with : e.g. "2006:"############################################
+#############################################localAS and remoteAS are the AS numbers##########################################################
+#############################################intf_scale_end: Total number of interfaces from all VRFs#########################################
+##############################################################################################################################################
+
+def create_bgpv6_vrf(device_id,ipv6,localAS,remoteAS,scale_start,intf_scale_end,vrf_list,vrf_scale_start, vrf_scale_end):
+    for vrf in range(vrf_scale_start, vrf_scale_end+1):
+        print("In loop again {}".format(scale_start))
+        vrf_id = vrf_list['vrf'+str(vrf)]
+        print("VRF is {}".format('vrf'+str(vrf)))
+        print("VRF Id is {}".format(vrf_id))
+        t1 = []
+        t2 = []
+        for t in range(vrf_scale_start,vrf_scale_end+1):
+            if t==int(vrf):
+                t2.append(str(localAS)+":"+str(t))
+                print("temp {}".format(t2))
+            else:
+                print(t)
+                print(vrf)
+                t1.append(str(localAS)+":"+str(t))
+        url = '/api/fmc_config/v1/domain/{}/devices/devicerecords/{}/routing/virtualrouters/{}/bgp'.format(domainUUID, device_id,vrf_id)
+        l1 = []
+        payload = { 
+                   "addressFamilyIPv6":{
+                      "neighbors":[],
+                      "routeImportExport":{
+                            "importRouteTargets":[
+                            ],
+                            "exportRouteTargets":[
+                            ]
+                      },
+                      "redistributeProtocols": [
+                          {
+                            "type": "RedistributeStatic"
+                          },
+                          {
+                            "type": "RedistributeConnected"
+                          }
+                      ],
+                      "synchronization": 'false',
+                      "type": "afipv6",
+                      'ibgp': 5,
+                      'ebgp': 5
+                   },
+                   "asNumber": localAS,
+                   "name": "EnableIPv4AndIPv6",
+                   "type": "bgp"
+                }
+        payload['addressFamilyIPv6']['routeImportExport']['importRouteTargets']=t1
+        payload['addressFamilyIPv6']['routeImportExport']['exportRouteTargets']=t2
+
+        for i in range(scale_start,intf_scale_end+1):
+            print("In Outer loop {}".format(vrf))
+            print("In Inner loop {}".format(i))
+            if i <= 250:
+                j = '1'
+                l1.append({'ipv6Address': ipv6+'1:'+str(i)+'::2',"neighborAdvanced":{"neighborHops":{"disableConnectedCheck": 'true',"maxHopCount":5,\
+                    "neighborTtlSecurityHops":1,"type":"neighborebgpmultihop"},"neighborTransportConnectionMode":{"establishTCPSession": 'false',\
+                    "type":"neighbortransportconnectionmode"},"neighborVersion":0,"neighborWeight":515,"nextHopSelf": 'true',"sendCommunity": 'true',\
+                    "type":"neighboradvanced"},"neighborGeneral":{"fallOverBFD":"SINGLE_HOP","shutdown": 'false',"type":"neighborgeneral","enableAddress": 'true'},\
+                    "neighborHaMode":{"disable": 'false',"type":"neighborhamode"},"remoteAs":'65091',"type": "neighboripv6"})
+            elif i > 250 and i <= 500:
+                j = '2'
+                l1.append({'ipv6Address': ipv6+'1:'+str(i)+'::2',"neighborAdvanced":{"neighborHops":{"disableConnectedCheck": 'true',"maxHopCount":5,\
+                    "neighborTtlSecurityHops":1,"type":"neighborebgpmultihop"},"neighborTransportConnectionMode":{"establishTCPSession": 'false',\
+                    "type":"neighbortransportconnectionmode"},"neighborVersion":0,"neighborWeight":515,"nextHopSelf": 'true',"sendCommunity": 'true',\
+                    "type":"neighboradvanced"},"neighborGeneral":{"fallOverBFD":"SINGLE_HOP","shutdown": 'false',"type":"neighborgeneral","enableAddress": 'true'},\
+                    "neighborHaMode":{"disable": 'false',"type":"neighborhamode"},"remoteAs":'65091',"type": "neighboripv6"})
+            print("L1 is {}".format(l1))
+            if i%5 == 0:
+                payload['addressFamilyIPv6']['neighbors']=l1
+                response = api_ops('put', url, payload)
+                scale_start = i+1
+                break
+            else:
+                print("Continue to add BGP neighbor in same vrf")
+                continue
