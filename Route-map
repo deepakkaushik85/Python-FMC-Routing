@@ -1,0 +1,41 @@
+############################################################################################################
+########                           Creates Extended Community-list on FMC                  #################
+########                           domainUUID : domain_UUID                                #################
+########                           ext_comm_name : Extended Community Standard only        #################
+######## start_range/end_range : Starting/End value of Extended Community, will be appended to AS###########
+########                            localAS : BGP Local AS number                          #################
+############################################################################################################
+
+def create_ext_community(domainUUID,ext_comm_name,end_range,start_range,localAS):
+  headers = {'Content-Type': 'application/json', 'x-auth-access-token': auth_token}
+  url = '/api/fmc_config/v1/domain/{}/object/extendedcommunitylists'.format(domainUUID)
+  community_list_temp = []
+  for i in range(start_range,end_range+1):
+    community_list_temp.append({"sequence":i,"action":"PERMIT","routeTarget":str(localAS)+":"+str(i)})
+    payload = {
+      "type": "ExtendedCommunityList",
+      "name": ext_comm_name,
+      "subType": "Standard",
+      "entries": []
+    }
+  payload['entries']=community_list_temp
+  print(payload)
+  resp = requests.put(url, data=json.dumps(payload), headers=headers, verify=False)
+  if resp.status_code == 200 or resp.status_code == 201:
+    print(operation, " API call Success!!!")
+    return json.loads(resp.text)
+  elif resp.status_code == 429:
+    print("The maximum limit of 120 API calls per minute has been exceeded. Retrying in 60 seconds ... ")
+    time.sleep(63)
+  elif resp.status_code == 401:
+    print("Token expired, Generate new token")
+    auth_token = generate_token()
+    print(auth_token)
+    continue
+    if auth_token:
+      headers['X-auth-access-token'] = auth_token
+      return auth_token
+    else:
+      print("Failed to generate token, Abort")
+  else:
+    print("PUT Failed, Error --> ", resp.text)
